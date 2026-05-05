@@ -17,7 +17,12 @@ auth.post('/register', async (c) => {
     }
 
     // Check if user already exists
-    const existing = await db.select().from(users).where(eq(users.email, email)).get()
+    const existing = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .get();
+
     if (existing) {
         return c.json({ error: 'Email already in use' }, 400);
     }
@@ -33,19 +38,26 @@ auth.post('/register', async (c) => {
 auth.post ('/login', async (c) => {
     const { email, password } = await c.req.json()
 
-    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string' || password.length < 8) {
         return c.json({ error: 'Invalid email or password' }, 400);
     }
 
-    const user = await db.select().from(users).where(eq(users.email, email)).get()
+    const user = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .get();
 
-    if (!user) {
-        return c.json({ error: 'Invalid email or password' }, 400);
+    const DUMMY_HASH = '$argon2id$v=19$m=65536,t=3,p=1$dummysaltdummysalt$dummyhashvaluedummyhashvalue'
+    
+    const isValid = await verifyPassword(
+        user?.passwordHash ?? DUMMY_HASH, password);
+    
+    if (!user || !isValid) {
+        return c.json({ error: 'Invalid credentials' }, 401);
     }
 
-    const valid = await verifyPassword(user.passwordHash, password)
-
-    if (!valid) {
-        return c.json({ error: 'Invalid email or password' }, 400);
-    } 
+    return c.json({ success: true });
 })
+
+export default auth

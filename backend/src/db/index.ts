@@ -1,11 +1,12 @@
-// Connection to the database
+// src/db/index.ts
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import Database from 'better-sqlite3'
-// @ts-ignore 
-import * as schema from './schema'    
+import * as schema from './schema.js'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-// Connection
-const sqlite = new Database('database.sqlite')
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const dbPath = path.join(__dirname, '../../database.sqlite')
 
-// Drizzle instance
+const sqlite = new Database(dbPath)
 export const db = drizzle(sqlite, { schema })

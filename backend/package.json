@@ -8,17 +8,22 @@
     "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
+    "@gltf-transform/core": "^4.3.0",
+    "@gltf-transform/functions": "^4.3.0",
     "@hono/node-server": "^1.19.14",
     "@paralleldrive/cuid2": "^3.3.0",
     "argon2": "^0.44.0",
     "better-sqlite3": "^12.9.0",
-    "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.15"
+    "hono": "^4.12.15",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.11.17",
+    "@types/qrcode": "^1.5.6",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.21.0",
     "typescript": "^5.8.3"
   }

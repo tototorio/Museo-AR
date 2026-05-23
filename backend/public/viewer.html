@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="screen-orientation" content="portrait">
+  <title>AR Viewer</title>
+  <!-- A-Frame 1.6.0 + AR.js 3.4.7: these versions must match. -->
+  <!-- AR.js 3.4.7 requires A-Frame 1.6.0 exactly.            -->
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
+</head>
+<!-- The official AR.js pattern: margin 0, overflow hidden, nothing else.   -->
+<!-- No canvas CSS overrides — let AR.js own the canvas entirely.           -->
+<style>
+@media (orientation: landscape) {
+  body {
+    display: none;
+  }
+}</style>
+
+<body style="margin: 0; overflow: hidden;">
+
+  <a-scene
+    embedded
+    arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;"
+    vr-mode-ui="enabled: false"
+    renderer="logarithmicDepthBuffer: true; pixelRatio: 1;"
+    >
+    <!-- All 3D content goes inside <a-marker>. It becomes the origin (0,0,0). -->
+    <a-marker preset="hiro" id="hiro-marker" emitevents="true"></a-marker>
+
+    <!-- Camera must be outside the marker, as a direct child of a-scene. -->
+    <a-entity camera fov="60"></a-entity>
+  </a-scene>
+
+  <script>
+    const id = window.location.pathname.split('/').pop()
+    const marker = document.getElementById('hiro-marker')
+    const scene = document.querySelector('a-scene')
+
+    marker.addEventListener('markerFound', () => console.log('MARKER FOUND'))
+    marker.addEventListener('markerLost',  () => console.log('MARKER LOST'))
+
+    function loadModels(assets) {
+      assets
+        .filter(a => a.type === 'model')
+        .forEach(asset => {
+          const el = document.createElement('a-entity')
+          el.setAttribute('gltf-model', asset.url)
+          // position '0 0 0': model origin sits on the marker center.
+          // rotation '-90 0 0': corrects Z-up models (Blender default export).
+          //   → if model appears flat on the ground: try '0 0 0'
+          //   → if model appears upside down: try '90 0 0'
+          // scale '0.05 0.05 0.05': safe starting point for most GLBs.
+          //   → invisible? go up: '0.1 0.1 0.1' or '1 1 1'
+          //   → huge? go down: '0.01 0.01 0.01' or '0.001 0.001 0.001'
+          el.setAttribute('position', '0 0 0')
+          el.setAttribute('rotation', '-45 0 0')
+          el.setAttribute('scale', '0.5 0.5 0.5')
+          marker.appendChild(el)
+        })
+      }
+
+    fetch(`/api/scenes/${id}`)
+      .then(r => r.json())
+      .then(sceneData => {
+        if (scene.hasLoaded) {
+          loadModels(sceneData.assets)
+        } else {
+          scene.addEventListener('loaded', () => loadModels(sceneData.assets))
+        }
+      })
+      .catch(err => console.error('Failed to load scene:', err))
+  </script>
+</body>
+</html>

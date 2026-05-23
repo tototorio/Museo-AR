@@ -1,23 +1,9 @@
 <script setup lang="ts">
 
+import { login } from '../api/clients.ts'
+
 let email = '';
 let password = '';
-
-async function login(email: string, password: string) {
-  const response = await fetch("/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include", // ← critical, explained below
-    body: JSON.stringify({ email, password }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message);
-  }
-
-  return response.json();
-}
 
 </script>
 

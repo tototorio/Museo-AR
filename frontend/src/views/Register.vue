@@ -1,22 +1,10 @@
 <script setup lang="ts">
 
-let email = '';
-let password = '';
+import { ref } from 'vue'
+import { register } from '../api/clients.ts' 
 
-async function register(email: string, password: string) {
-  const response = await fetch("/api/auth/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message);
-  }
-
-  return response.json();
-}
+const email = ref('')
+const password = ref('')
 
 </script>
 

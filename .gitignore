@@ -20,8 +20,8 @@ backend/drizzle/
 # deps
 node_modules/
 
-database.sqlite
-uploads/
+backend/database.sqlite
+backend/uploads/
 
 # env
 .env
@@ -38,3 +38,5 @@ lerna-debug.log*
 
 # misc
 .DS_Store
+
+ar-educativa-guide.md

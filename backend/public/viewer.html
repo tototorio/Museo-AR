@@ -47,16 +47,9 @@
         .forEach(asset => {
           const el = document.createElement('a-entity')
           el.setAttribute('gltf-model', asset.url)
-          // position '0 0 0': model origin sits on the marker center.
-          // rotation '-90 0 0': corrects Z-up models (Blender default export).
-          //   → if model appears flat on the ground: try '0 0 0'
-          //   → if model appears upside down: try '90 0 0'
-          // scale '0.05 0.05 0.05': safe starting point for most GLBs.
-          //   → invisible? go up: '0.1 0.1 0.1' or '1 1 1'
-          //   → huge? go down: '0.01 0.01 0.01' or '0.001 0.001 0.001'
-          el.setAttribute('position', '0 0 0')
-          el.setAttribute('rotation', '-45 0 0')
-          el.setAttribute('scale', '0.5 0.5 0.5')
+          el.setAttribute('position', asset.position ?? '0 0 0')
+          el.setAttribute('rotation', asset.rotation ?? '-90 0 0')
+          el.setAttribute('scale',    asset.scale    ?? '0.05 0.05 0.05')
           marker.appendChild(el)
         })
       }

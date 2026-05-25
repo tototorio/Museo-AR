@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Editor de Escena</title>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://unpkg.com/aframe-orbit-controls@1.3.2/dist/aframe-orbit-controls.min.js"></script>
+  <style>
+    /* ── Reset ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #1a1a2e;
+      --surface:    #16213e;
+      --surface2:   #0f3460;
+      --accent:     #e94560;
+      --accent2:    #533483;
+      --text:       #eaeaea;
+      --text-dim:   #888;
+      --btn-h:      48px;
+      --radius:     10px;
+      --transition: 0.2s ease;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, system-ui, sans-serif;
+      overflow: hidden;
+      width: 100vw; height: 100vh;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ── A-Frame canvas fills entire background ─────────────── */
+    a-scene { position: fixed; inset: 0; }
+
+    /* ── TOP BAR ────────────────────────────────────────────── */
+    #top-bar {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 12px;
+      background: rgba(22, 33, 62, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    #top-bar .scene-name {
+      font-size: 14px; font-weight: 600;
+      color: var(--text-dim);
+      flex: 1; text-align: center;
+    }
+    .icon-btn {
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: var(--radius);
+      cursor: pointer; font-size: 18px;
+      transition: background var(--transition);
+    }
+    .icon-btn:hover { background: rgba(255,255,255,0.15); }
+
+    /* ── BOTTOM BAR ─────────────────────────────────────────── */
+    #bottom-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 12px 16px 20px;
+      background: rgba(22, 33, 62, 0.85);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255,255,255,0.07);
+      display: flex; gap: 8px; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .mode-btn {
+      height: var(--btn-h);
+      padding: 0 20px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.05);
+      color: var(--text-dim);
+      font-size: 14px; font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+      /* Disabled look by default */
+      pointer-events: none;
+      opacity: 0.4;
+    }
+    /* Active state — a model is selected */
+    .mode-btn.enabled {
+      pointer-events: auto;
+      opacity: 1;
+      color: var(--text);
+    }
+    /* Currently selected mode */
+    .mode-btn.active {
+      background: var(--accent2);
+      border-color: var(--accent2);
+      color: #fff;
+    }
+    #ok-btn {
+      height: var(--btn-h);
+      padding: 0 20px;
+      border-radius: var(--radius);
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      font-size: 14px; font-weight: 700;
+      cursor: pointer;
+      display: none; /* shown only when a model is selected */
+      transition: all var(--transition);
+    }
+    #ok-btn:hover { background: var(--accent); color: #fff; }
+
+    /* ── Y-AXIS BAR (left side, shown in position + scale mode) */
+    #y-bar {
+      position: fixed;
+      left: 12px;
+      top: 50%; transform: translateY(-50%);
+      display: none; /* shown by JS */
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      z-index: 100;
+    }
+    #y-bar label {
+      font-size: 10px; color: var(--text-dim);
+      letter-spacing: 0.05em;
+      writing-mode: vertical-rl;
+      text-transform: uppercase;
+    }
+    .y-btn {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      font-size: 22px; font-weight: 300;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background var(--transition);
+    }
+    .y-btn:hover { background: var(--accent2); }
+
+    /* ── RESET ROTATION BUTTON (shown in rotate mode) ────────── */
+    #reset-rot-btn {
+      position: fixed;
+      right: 12px;
+      top: 50%; transform: translateY(-50%);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      z-index: 100;
+    }
+    #reset-rot-btn button {
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    #reset-rot-btn button:hover { background: var(--accent2); }
+
+    /* ── SIDE MENU ──────────────────────────────────────────── */
+    #side-menu {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: min(340px, 85vw);
+      background: var(--surface);
+      border-left: 1px solid rgba(255,255,255,0.08);
+      z-index: 200;
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+    }
+    #side-menu.open { transform: translateX(0); }
+
+    .menu-header {
+      height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      flex-shrink: 0;
+    }
+    .menu-header span { font-weight: 600; font-size: 15px; }
+
+    /* Tab strip */
+    .tab-strip {
+      display: flex;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      flex-shrink: 0;
+    }
+    .tab {
+      flex: 1; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 600; color: var(--text-dim);
+      cursor: pointer; border-bottom: 2px solid transparent;
+      transition: all var(--transition);
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* Tab content panels */
+    .tab-panel { display: none; flex: 1; overflow-y: auto; padding: 12px; }
+    .tab-panel.active { display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; }
+    /* Active assets panel is a list, not a grid */
+    #panel-active.active { flex-direction: column; flex-wrap: nowrap; gap: 0; }
+
+    /* Asset grid card */
+    .asset-card {
+      width: calc(50% - 5px);
+      aspect-ratio: 1;
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px; padding: 12px;
+      cursor: pointer;
+      transition: all var(--transition);
+      text-align: center;
+    }
+    .asset-card:hover { background: rgba(233,69,96,0.15); border-color: var(--accent); }
+    .asset-card .icon { font-size: 32px; }
+    .asset-card .name { font-size: 11px; color: var(--text-dim); word-break: break-all; line-height: 1.3; }
+    .asset-card.loading { opacity: 0.5; pointer-events: none; }
+
+    /* Active asset list row */
+    .active-asset-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .active-asset-row:hover    { background: rgba(255,255,255,0.05); }
+    .active-asset-row.selected { background: rgba(83,52,131,0.3); border-color: var(--accent2); }
+    .active-asset-row .name { flex: 1; font-size: 13px; }
+    .active-asset-row button {
+      padding: 6px 10px;
+      border-radius: 6px; border: none;
+      font-size: 11px; cursor: pointer;
+    }
+    .btn-reset { background: rgba(255,255,255,0.1); color: var(--text); }
+    .btn-remove { background: rgba(233,69,96,0.2); color: var(--accent); }
+    .btn-reset:hover  { background: rgba(255,255,255,0.2); }
+    .btn-remove:hover { background: var(--accent); color: #fff; }
+
+    /* Loading / empty state in panels */
+    .panel-msg {
+      width: 100%; text-align: center;
+      color: var(--text-dim); font-size: 13px;
+      padding: 24px 0;
+    }
+
+    /* ── EXIT MODAL ─────────────────────────────────────────── */
+    #exit-modal {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center;
+      z-index: 300;
+    }
+    #exit-modal.open { display: flex; }
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 28px 24px;
+      max-width: 320px; width: 90%;
+      text-align: center;
+    }
+    .modal-box h2 { font-size: 17px; margin-bottom: 8px; }
+    .modal-box p  { font-size: 13px; color: var(--text-dim); margin-bottom: 24px; line-height: 1.5; }
+    .modal-actions { display: flex; flex-direction: column; gap: 8px; }
+    .modal-actions button {
+      width: 100%; height: 44px;
+      border-radius: var(--radius); border: none;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    #modal-save    { background: var(--accent); color: #fff; }
+    #modal-discard { background: rgba(255,255,255,0.08); color: var(--text); }
+    #modal-cancel  { background: transparent; color: var(--text-dim); font-weight: 400; }
+    #modal-save:hover    { opacity: 0.9; }
+    #modal-discard:hover { background: rgba(255,255,255,0.15); }
+
+    /* ── SELECTION HIGHLIGHT ────────────────────────────────── */
+    /* A-Frame entities don't highlight natively — we overlay a
+       thin ring around the model's base using a separate a-ring. */
+  </style>
+</head>
+<body>
+
+  <!-- ── TOP BAR ─────────────────────────────────────────── -->
+  <div id="top-bar">
+    <div class="icon-btn" id="exit-btn" title="Salir">✕</div>
+    <span class="scene-name" id="scene-name">Cargando...</span>
+    <div class="icon-btn" id="menu-btn" title="Assets">☰</div>
+  </div>
+
+  <!-- ── Y BAR (position height / scale) ────────────────── -->
+  <div id="y-bar">
+    <button class="y-btn" id="y-plus">+</button>
+    <label id="y-bar-label">Altura</label>
+    <button class="y-btn" id="y-minus">−</button>
+  </div>
+
+  <!-- ── RESET ROTATION (shown in rotate mode) ───────────── -->
+  <div id="reset-rot-btn">
+    <button id="reset-rot">↺ Reset</button>
+  </div>
+
+  <!-- ── A-FRAME SCENE ───────────────────────────────────── -->
+  <a-scene
+    background="color: #1a1a2e"
+    vr-mode-ui="enabled: false"
+    renderer="antialias: true; logarithmicDepthBuffer: true;"
+  >
+    <!-- Orbit camera. look-controls MUST be disabled or it conflicts. -->
+    <a-entity
+      id="camera-rig"
+      camera
+      look-controls="enabled: false"
+      orbit-controls="
+        target: 0 0 0;
+        initialPosition: 0 2.5 4;
+        enableDamping: true;
+        dampingFactor: 0.1;
+        rotateSpeed: 0.5;
+        minDistance: 0.5;
+        maxDistance: 20;
+        enablePan: false;
+        enableZoom: true;
+        minPolarAngle: 5;
+        maxPolarAngle: 85;
+      "
+    >
+      <!--
+        Cursor inside the camera fires raycaster events on click/tap.
+        objects: [data-selectable] means it only hits entities we tag.
+        fuse: false = click/tap only, no hover-to-click timer.
+      -->
+      <a-cursor
+        raycaster="objects: [data-selectable]; far: 100"
+        fuse="false"
+        visible="false"
+      ></a-cursor>
+    </a-entity>
+
+    <!-- ── FLOOR ──────────────────────────────────────────── -->
+    <!-- Large dark plane. Receives no raycaster hits (no data-selectable). -->
+    <a-plane
+      position="0 0 0"
+      rotation="-90 0 0"
+      width="40" height="40"
+      material="color: #12122a; roughness: 1; metalness: 0;"
+    ></a-plane>
+
+    <!-- Grid lines — a thin wireframe plane over the floor -->
+    <a-plane
+      position="0 0.001 0"
+      rotation="-90 0 0"
+      width="20" height="20"
+      material="color: #2a2a5a; wireframe: true; opacity: 0.5; transparent: true;"
+    ></a-plane>
+
+    <!-- ── CENTER MARKER ──────────────────────────────────── -->
+    <!-- Represents where the physical Hiro marker will be.
+         Lives on the floor and gets covered by models placed at 0,0,0. -->
+    <a-entity position="0 0.002 0">
+      <!-- Outer ring -->
+      <a-ring
+        material="color: #e94560; opacity: 0.6; transparent: true; side: double;"
+        radius-inner="0.38" radius-outer="0.42"
+        rotation="-90 0 0"
+      ></a-ring>
+      <!-- Inner dot -->
+      <a-circle
+        material="color: #e94560; opacity: 0.3; transparent: true; side: double;"
+        radius="0.1"
+        rotation="-90 0 0"
+      ></a-circle>
+      <!-- Crosshair arms — two thin boxes lying flat -->
+      <a-box
+        position="0 0 0"
+        width="0.8" height="0.005" depth="0.02"
+        material="color: #e94560; opacity: 0.5; transparent: true;"
+      ></a-box>
+      <a-box
+        position="0 0 0"
+        width="0.02" height="0.005" depth="0.8"
+        material="color: #e94560; opacity: 0.5; transparent: true;"
+      ></a-box>
+    </a-entity>
+
+    <!-- ── MODEL CONTAINER ────────────────────────────────── -->
+    <!-- Models are appended here dynamically by JS. -->
+    <a-entity id="models-root"></a-entity>
+
+  </a-scene>
+
+  <!-- ── BOTTOM BAR ──────────────────────────────────────── -->
+  <div id="bottom-bar">
+    <button class="mode-btn" id="btn-pos">Posición</button>
+    <button class="mode-btn" id="btn-rot">Rotación</button>
+    <button class="mode-btn" id="btn-scale">Tamaño</button>
+    <button id="ok-btn">OK</button>
+  </div>
+
+  <!-- ── SIDE MENU ───────────────────────────────────────── -->
+  <div id="side-menu">
+    <div class="menu-header">
+      <span>Assets</span>
+      <div class="icon-btn" id="menu-close">✕</div>
+    </div>
+    <div class="tab-strip">
+      <div class="tab active" data-tab="active">Activos</div>
+      <div class="tab" data-tab="add">Añadir</div>
+    </div>
+    <!-- "Activos" tab: assets currently in scene — shown first -->
+    <div class="tab-panel active" id="panel-active"></div>
+    <!-- "Añadir" tab: assets NOT yet in scene, loaded lazily on open -->
+    <div class="tab-panel" id="panel-add">
+      <div class="panel-msg">Abre este panel para cargar assets.</div>
+    </div>
+  </div>
+
+  <!-- ── EXIT MODAL ──────────────────────────────────────── -->
+  <div id="exit-modal">
+    <div class="modal-box">
+      <h2>¿Guardar cambios?</h2>
+      <p>Tienes cambios sin guardar en esta escena.</p>
+      <div class="modal-actions">
+        <button id="modal-save">Guardar y salir</button>
+        <button id="modal-discard">No guardar</button>
+        <button id="modal-cancel">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // ═══════════════════════════════════════════════════════════
+  //  BOOTSTRAP — wait for A-Frame before doing anything
+  // ═══════════════════════════════════════════════════════════
+  const sceneId    = window.location.pathname.split('/').pop()
+  const aScene     = document.querySelector('a-scene')
+  const modelsRoot = document.getElementById('models-root')
+  const cameraRig  = document.getElementById('camera-rig')
+
+  // ───────────────────────────────────────────────────────────
+  //  STATE
+  // ───────────────────────────────────────────────────────────
+
+  // placedModels: Map<assetId, { el, assetData, dirty, originalRotation }>
+  // el              → the <a-entity> in the scene
+  // assetData       → full asset object from the API
+  // dirty           → true if transform changed since load
+  // originalRotation → rotation when a rotate session starts (for reset)
+  const placedModels = new Map()
+
+  let selectedId   = null   // assetId of currently selected model
+  let currentMode  = null   // 'pos' | 'rot' | 'scale' | null
+  let isDragging   = false  // true while user is dragging the selected model
+  let lastPointer  = null   // {x, y} of last pointer event
+
+  // Tuning — adjust by feel
+  const MOVE_FACTOR  = 0.004   // screen px → world meters (XZ move)
+  const ROT_FACTOR   = 0.4     // screen px → degrees
+  const Y_STEP_POS   = 0.05    // meters per Y+/− press
+  const SCALE_STEP   = 0.05    // scale per Y+/− press (additive on all axes)
+
+  // ───────────────────────────────────────────────────────────
+  //  ORBIT CONTROLS ENABLE / DISABLE
+  //  We disable orbit while the user drags a model in move/rotate mode
+  //  so the camera doesn't spin when they mean to move the object.
+  // ───────────────────────────────────────────────────────────
+  function setOrbit(enabled) {
+    cameraRig.setAttribute('orbit-controls', 'enabled', enabled)
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  SELECTION
+  // ───────────────────────────────────────────────────────────
+  function selectModel(assetId) {
+    // Deselect previous
+    if (selectedId && placedModels.has(selectedId)) {
+      placedModels.get(selectedId).el.setAttribute(
+        'material', 'opacity', 1
+      )
+    }
+
+    selectedId = assetId
+    currentMode = null
+
+    // Visual feedback — slight transparency on selected model
+    const { el } = placedModels.get(assetId)
+    // We can't set material on a gltf-model directly, so we use an outline ring
+    updateSelectionRing(el)
+
+    // Light up bottom buttons
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.add('enabled'))
+    document.getElementById('ok-btn').style.display = 'block'
+
+    updateModeUI()
+  }
+
+  function deselectModel() {
+    if (selectedId) {
+      removeSelectionRing()
+    }
+    selectedId  = null
+    currentMode = null
+
+    document.querySelectorAll('.mode-btn').forEach(b => {
+      b.classList.remove('enabled', 'active')
+    })
+    document.getElementById('ok-btn').style.display = 'none'
+
+    hideYBar()
+    hideResetRot()
+    setOrbit(true)
+    updateModeUI()
+  }
+
+  // A thin ring at the model's base to indicate selection
+  let selectionRingEl = null
+  function updateSelectionRing(modelEl) {
+    removeSelectionRing()
+    selectionRingEl = document.createElement('a-ring')
+    selectionRingEl.setAttribute('material',
+      'color: #e94560; opacity: 0.8; transparent: true; side: double;')
+    selectionRingEl.setAttribute('radius-inner', '0.45')
+    selectionRingEl.setAttribute('radius-outer', '0.5')
+    selectionRingEl.setAttribute('rotation', '-90 0 0')
+    selectionRingEl.setAttribute('position', '0 0.003 0')
+    modelEl.appendChild(selectionRingEl)
+  }
+  function removeSelectionRing() {
+    if (selectionRingEl) { selectionRingEl.remove(); selectionRingEl = null }
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  MODE SWITCHING
+  // ───────────────────────────────────────────────────────────
+  function setMode(mode) {
+    currentMode = mode
+
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'))
+
+    hideYBar()
+    hideResetRot()
+
+    if (mode === 'pos') {
+      document.getElementById('btn-pos').classList.add('active')
+      showYBar('Altura')
+    } else if (mode === 'rot') {
+      document.getElementById('btn-rot').classList.add('active')
+      // Store current rotation so user can reset to it
+      const entry = placedModels.get(selectedId)
+      const rot   = entry.el.getAttribute('rotation')
+      entry.originalRotation = { ...rot }
+      showResetRot()
+    } else if (mode === 'scale') {
+      document.getElementById('btn-scale').classList.add('active')
+      showYBar('Tamaño')
+    }
+  }
+
+  function updateModeUI() {
+    // Called after deselect — ensures nothing lingers
+  }
+
+  // ─── Y bar ─────────────────────────────────────────────────
+  function showYBar(label) {
+    const bar = document.getElementById('y-bar')
+    bar.style.display = 'flex'
+    document.getElementById('y-bar-label').textContent = label
+  }
+  function hideYBar() { document.getElementById('y-bar').style.display = 'none' }
+
+  // ─── Reset rotation button ─────────────────────────────────
+  function showResetRot() { document.getElementById('reset-rot-btn').style.display = 'flex' }
+  function hideResetRot() { document.getElementById('reset-rot-btn').style.display = 'none' }
+
+  // ───────────────────────────────────────────────────────────
+  //  POINTER DRAG — move or rotate selected model
+  //  Works for both mouse (mousemove) and touch (touchmove).
+  //  Orbit is disabled while isDragging is true.
+  // ───────────────────────────────────────────────────────────
+  function getPointerXY(e) {
+    if (e.touches && e.touches.length > 0) {
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    }
+    return { x: e.clientX, y: e.clientY }
+  }
+
+  // We attach these listeners to the document so drag continues
+  // even if the pointer leaves the model mesh.
+  document.addEventListener('mousedown',  onPointerDown)
+  document.addEventListener('touchstart', onPointerDown, { passive: true })
+  document.addEventListener('mousemove',  onPointerMove)
+  document.addEventListener('touchmove',  onPointerMove, { passive: false })
+  document.addEventListener('mouseup',    onPointerUp)
+  document.addEventListener('touchend',   onPointerUp)
+
+  function onPointerDown(e) {
+    // Only drag in move or rotate mode, with a model selected
+    if (!selectedId || (currentMode !== 'pos' && currentMode !== 'rot')) return
+    // Don't start drag from UI elements
+    if (e.target.closest('#bottom-bar, #top-bar, #y-bar, #reset-rot-btn, #side-menu')) return
+
+    isDragging = true
+    lastPointer = getPointerXY(e)
+    setOrbit(false)
+  }
+
+  function onPointerMove(e) {
+    if (!isDragging || !selectedId) return
+    if (e.cancelable) e.preventDefault()
+
+    const p  = getPointerXY(e)
+    const dx = p.x - lastPointer.x
+    const dy = p.y - lastPointer.y
+    lastPointer = p
+
+    const entry = placedModels.get(selectedId)
+    if (!entry) return
+
+    if (currentMode === 'pos') {
+      // Move in XZ plane. Camera faces -Z, so screen X → world X,
+      // screen Y → world Z (positive Y on screen = away from camera = +Z).
+      const pos = entry.el.getAttribute('position')
+      entry.el.setAttribute('position', {
+        x: pos.x + dx * MOVE_FACTOR,
+        y: pos.y,
+        z: pos.z + dy * MOVE_FACTOR,
+      })
+      markDirty(selectedId)
+
+    } else if (currentMode === 'rot') {
+      // Horizontal drag → Y axis, vertical drag → X axis
+      const rot = entry.el.getAttribute('rotation')
+      entry.el.setAttribute('rotation', {
+        x: rot.x + dy * ROT_FACTOR,
+        y: rot.y + dx * ROT_FACTOR,
+        z: rot.z,
+      })
+      markDirty(selectedId)
+    }
+  }
+
+  function onPointerUp() {
+    if (!isDragging) return
+    isDragging = false
+    // Re-enable orbit only if still in a mode where drag is used
+    // (scale mode never disabled orbit)
+    if (currentMode === 'pos' || currentMode === 'rot') {
+      setOrbit(true)
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  Y BAR — height (position mode) or uniform scale (scale mode)
+  // ───────────────────────────────────────────────────────────
+  document.getElementById('y-plus').addEventListener('click', () => {
+    if (!selectedId) return
+    const entry = placedModels.get(selectedId)
+
+    if (currentMode === 'pos') {
+      const pos = entry.el.getAttribute('position')
+      entry.el.setAttribute('position', { x: pos.x, y: pos.y + Y_STEP_POS, z: pos.z })
+    } else if (currentMode === 'scale') {
+      const s = entry.el.getAttribute('scale')
+      const ns = s.x + SCALE_STEP
+      entry.el.setAttribute('scale', { x: ns, y: ns, z: ns })
+    }
+    markDirty(selectedId)
+  })
+
+  document.getElementById('y-minus').addEventListener('click', () => {
+    if (!selectedId) return
+    const entry = placedModels.get(selectedId)
+
+    if (currentMode === 'pos') {
+      const pos = entry.el.getAttribute('position')
+      entry.el.setAttribute('position', { x: pos.x, y: pos.y - Y_STEP_POS, z: pos.z })
+    } else if (currentMode === 'scale') {
+      const s  = entry.el.getAttribute('scale')
+      const ns = Math.max(0.001, s.x - SCALE_STEP) // don't go negative
+      entry.el.setAttribute('scale', { x: ns, y: ns, z: ns })
+    }
+    markDirty(selectedId)
+  })
+
+  // ───────────────────────────────────────────────────────────
+  //  RESET ROTATION
+  // ───────────────────────────────────────────────────────────
+  document.getElementById('reset-rot').addEventListener('click', () => {
+    if (!selectedId) return
+    const entry = placedModels.get(selectedId)
+    if (entry.originalRotation) {
+      entry.el.setAttribute('rotation', entry.originalRotation)
+      markDirty(selectedId)
+    }
+  })
+
+  // ───────────────────────────────────────────────────────────
+  //  MODE BUTTONS
+  // ───────────────────────────────────────────────────────────
+  document.getElementById('btn-pos').addEventListener('click', () => {
+    if (selectedId) setMode('pos')
+  })
+  document.getElementById('btn-rot').addEventListener('click', () => {
+    if (selectedId) setMode('rot')
+  })
+  document.getElementById('btn-scale').addEventListener('click', () => {
+    if (selectedId) setMode('scale')
+  })
+  document.getElementById('ok-btn').addEventListener('click', deselectModel)
+
+  // ───────────────────────────────────────────────────────────
+  //  DIRTY TRACKING
+  //  We only PATCH transforms that actually changed.
+  // ───────────────────────────────────────────────────────────
+  function markDirty(assetId) {
+    if (placedModels.has(assetId)) {
+      placedModels.get(assetId).dirty = true
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  ADD MODEL TO SCENE
+  //  Creates an <a-entity> with a gltf-model, adds raycaster tag,
+  //  wires click → selectModel.
+  // ───────────────────────────────────────────────────────────
+  function addModelToScene(assetData) {
+    const el = document.createElement('a-entity')
+
+    // Default transform: centered on marker, safe scale
+    const pos = assetData.position ?? '0 0 0'
+    const rot = assetData.rotation ?? '-90 0 0'
+    const scl = assetData.scale    ?? '0.05 0.05 0.05'
+
+    el.setAttribute('position', pos)
+    el.setAttribute('rotation', rot)
+    el.setAttribute('scale',    scl)
+    el.setAttribute('gltf-model', assetData.url)
+
+    // This attribute is what the cursor's raycaster targets.
+    // Without it the model is invisible to the raycaster.
+    el.setAttribute('data-selectable', '')
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation()
+      selectModel(assetData.id)
+    })
+
+    el.addEventListener('model-loaded', () => {
+      console.log('Loaded:', assetData.originalName)
+    })
+    el.addEventListener('model-error', (e) => {
+      console.error('Error loading model:', assetData.originalName, e.detail)
+    })
+
+    modelsRoot.appendChild(el)
+
+    placedModels.set(assetData.id, {
+      el,
+      assetData,
+      dirty: false,
+      originalRotation: null,
+    })
+
+    return el
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  SIDE MENU
+  // ───────────────────────────────────────────────────────────
+  const sideMenu = document.getElementById('side-menu')
+  let addPanelLoaded = false  // lazy load flag
+
+  document.getElementById('menu-btn').addEventListener('click', () => {
+    sideMenu.classList.add('open')
+    // Active tab is shown first — always refresh it on open
+    refreshActivePanel()
+    // Lazy load the add panel only if user has switched to it before
+    if (addPanelLoaded) loadAddPanel()
+  })
+  document.getElementById('menu-close').addEventListener('click', () => {
+    sideMenu.classList.remove('open')
+  })
+
+  // ─── Tabs ──────────────────────────────────────────────────
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+      tab.classList.add('active')
+      document.getElementById(`panel-${tab.dataset.tab}`).classList.add('active')
+      if (tab.dataset.tab === 'active') refreshActivePanel()
+      if (tab.dataset.tab === 'add' && !addPanelLoaded) {
+        loadAddPanel()
+        addPanelLoaded = true
+      }
+    })
+  })
+
+  // ─── "Añadir" panel — assets not yet in scene ──────────────
+  async function loadAddPanel() {
+    const panel = document.getElementById('panel-add')
+    panel.innerHTML = '<div class="panel-msg">Cargando...</div>'
+
+    try {
+      const res  = await fetch(`/api/assets?excludeScene=${sceneId}`)
+      const list = await res.json()
+
+      const models = list.filter(a => a.type === 'model')
+
+      if (models.length === 0) {
+        panel.innerHTML = '<div class="panel-msg">No hay más assets disponibles.</div>'
+        return
+      }
+
+      panel.innerHTML = ''
+      models.forEach(asset => {
+        const card = document.createElement('div')
+        card.className = 'asset-card'
+        card.innerHTML = `
+          <div class="icon">📦</div>
+          <div class="name">${asset.originalName}</div>
+        `
+        card.addEventListener('click', async () => {
+          card.classList.add('loading')
+          card.querySelector('.icon').textContent = '⏳'
+
+          try {
+            // Add to scene in the backend
+            const addRes = await fetch(`/api/scenes/${sceneId}/assets`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ assetId: asset.id })
+            })
+            const addedAsset = await addRes.json()
+
+            // Show in 3D viewport
+            addModelToScene(addedAsset)
+
+            // Auto-select the newly added model and close the menu —
+            // user almost certainly wants to position it right away
+            sideMenu.classList.remove('open')
+            selectModel(addedAsset.id)
+          } catch (err) {
+            console.error('Error adding asset:', err)
+            card.classList.remove('loading')
+            card.querySelector('.icon').textContent = '📦'
+          }
+        })
+        panel.appendChild(card)
+      })
+    } catch (err) {
+      panel.innerHTML = '<div class="panel-msg">Error al cargar assets.</div>'
+      console.error(err)
+    }
+  }
+
+  // ─── "Activos" panel — models currently in scene ───────────
+  function refreshActivePanel() {
+    const panel = document.getElementById('panel-active')
+    panel.innerHTML = ''
+
+    if (placedModels.size === 0) {
+      panel.innerHTML = '<div class="panel-msg">No hay modelos en la escena.</div>'
+      return
+    }
+
+    placedModels.forEach((entry, assetId) => {
+      const row = document.createElement('div')
+      row.className = 'active-asset-row'
+      // Highlight the currently selected row
+      if (assetId === selectedId) row.classList.add('selected')
+      row.innerHTML = `
+        <span class="name">📦 ${entry.assetData.originalName}</span>
+        <button class="btn-reset">Reset</button>
+        <button class="btn-remove">Quitar</button>
+      `
+      // Clicking the row (not the buttons) selects the model and closes the menu
+      row.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON') return // let buttons handle themselves
+        selectModel(assetId)
+        sideMenu.classList.remove('open')
+      })
+      row.querySelector('.btn-reset').addEventListener('click', (e) => {
+        e.stopPropagation()
+        entry.el.setAttribute('position', '0 0 0')
+        entry.el.setAttribute('rotation', '-90 0 0')
+        entry.el.setAttribute('scale', '0.05 0.05 0.05')
+        markDirty(assetId)
+      })
+      row.querySelector('.btn-remove').addEventListener('click', async (e) => {
+        e.stopPropagation()
+        await fetch(`/api/scenes/${sceneId}/assets/${assetId}`, { method: 'DELETE' })
+        entry.el.remove()
+        placedModels.delete(assetId)
+        if (selectedId === assetId) deselectModel()
+        addPanelLoaded = false
+        refreshActivePanel()
+      })
+      panel.appendChild(row)
+    })
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  EXIT + SAVE
+  // ───────────────────────────────────────────────────────────
+  const exitModal = document.getElementById('exit-modal')
+
+  document.getElementById('exit-btn').addEventListener('click', () => {
+    const hasDirty = [...placedModels.values()].some(e => e.dirty)
+    if (hasDirty) {
+      exitModal.classList.add('open')
+    } else {
+      navigateBack()
+    }
+  })
+
+  document.getElementById('modal-cancel').addEventListener('click', () => {
+    exitModal.classList.remove('open')
+  })
+
+  document.getElementById('modal-discard').addEventListener('click', navigateBack)
+
+  document.getElementById('modal-save').addEventListener('click', async () => {
+    await saveAllDirty()
+    navigateBack()
+  })
+
+  function navigateBack() {
+    // Go back to wherever the admin came from.
+    // Adjust this URL to your actual admin panel route.
+    window.history.back()
+  }
+
+  async function saveAllDirty() {
+    const dirty = [...placedModels.entries()].filter(([, e]) => e.dirty)
+
+    await Promise.all(dirty.map(async ([assetId, entry]) => {
+      const p = entry.el.getAttribute('position')
+      const r = entry.el.getAttribute('rotation')
+      const s = entry.el.getAttribute('scale')
+
+      await fetch(`/api/scenes/${sceneId}/assets/${assetId}/transform`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          position: `${p.x} ${p.y} ${p.z}`,
+          rotation: `${r.x} ${r.y} ${r.z}`,
+          scale:    `${s.x} ${s.y} ${s.z}`,
+        })
+      })
+
+      entry.dirty = false
+    }))
+  }
+
+  // ───────────────────────────────────────────────────────────
+  //  INITIAL SCENE LOAD
+  // ───────────────────────────────────────────────────────────
+  aScene.addEventListener('loaded', async () => {
+    try {
+      const res       = await fetch(`/api/scenes/${sceneId}`)
+      const sceneData = await res.json()
+
+      document.getElementById('scene-name').textContent = sceneData.name
+
+      // Load existing models (assets already linked to this scene)
+      const models = (sceneData.assets ?? []).filter(a => a.type === 'model')
+      models.forEach(asset => addModelToScene(asset))
+
+    } catch (err) {
+      console.error('Failed to load scene:', err)
+      document.getElementById('scene-name').textContent = 'Error al cargar'
+    }
+  })
+  </script>
+</body>
+</html>

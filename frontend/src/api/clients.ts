@@ -1,87 +1,129 @@
+// src/api/clients.ts
+// All fetch calls to the backend. credentials: 'include' is required on every
+// call so the browser sends the HttpOnly session cookie automatically.
+
 const BASE = '/api'
 
-// --- Types ---
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface Asset {
     id: string
+    userId: string
     url: string
     type: 'model' | 'image'
     filename: string
     originalName: string
     size: number
+    createdAt: string
 }
 
 export interface Scene {
     id: string
+    userId: string
     name: string
     description?: string
-    sceneConfig: Record<string, any>
     assets: Asset[]
-    createdAt: Date
+    createdAt: string
 }
 
-export interface AuthResponse {
-    message?: string
-    success?: boolean
+// ─── Helper ──────────────────────────────────────────────────────────────────
+// Wraps fetch with credentials and throws a readable error on non-ok responses.
+
+async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const res = await fetch(`${BASE}${path}`, {
+        ...options,
+        credentials: 'include', // always send the session cookie
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+        },
+    })
+
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `Request failed: ${res.status}`)
+    }
+
+    return res.json()
 }
 
-// --- Assets ---
+// ─── Assets ──────────────────────────────────────────────────────────────────
 
-// Uploads a single file. Returns the generated id and public url.
-// Do NOT pass sceneId here — assets are linked to scenes at scene creation time.
-export async function uploadAsset(file: File): Promise<{ id: string, url: string }> {
+// Fetch all assets belonging to the logged-in user.
+export async function getAssets(): Promise<Asset[]> {
+    return api<Asset[]>('/assets')
+}
+
+// Upload a single file to the user's asset library.
+// Note: FormData uploads must NOT set Content-Type manually — the browser
+// sets it with the correct multipart boundary automatically.
+export async function uploadAsset(file: File): Promise<{ id: string; url: string }> {
     const form = new FormData()
     form.append('file', file)
-    // ⚠️ Do NOT set Content-Type manually — the browser sets it automatically
-    // with the correct multipart boundary string. Setting it manually breaks parsing.
-    const res = await fetch(`${BASE}/assets`, { method: 'POST', body: form })
-    if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
-    return res.json()
-}
 
-// --- Scenes ---
-
-// Creates a scene and links the provided asset IDs to it via the join table.
-// Returns the scene id, the QR code as a data URL, and the viewer URL.
-export async function createScene(
-    name: string,
-    assetIds: string[]
-): Promise<{ id: string, qrDataUrl: string, viewerUrl: string }> {
-    const res = await fetch(`${BASE}/scenes`, {
+    const res = await fetch(`${BASE}/assets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, assetIds })
+        credentials: 'include',
+        body: form, // no Content-Type header here on purpose
     })
-    if (!res.ok) throw new Error(`Failed to create scene: ${res.status}`)
+
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? `Upload failed: ${res.status}`)
+    }
+
     return res.json()
 }
 
-// Fetches a single scene by id, including its linked assets.
-// Used by Viewer.vue after scanning the QR code.
+// Delete an asset from the user's library.
+export async function deleteAsset(id: string): Promise<void> {
+    await api(`/assets/${id}`, { method: 'DELETE' })
+}
+
+// Rename an asset (updates originalName).
+export async function renameAsset(id: string, name: string): Promise<void> {
+    await api(`/assets/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ originalName: name }),
+    })
+}
+
+// ─── Scenes ──────────────────────────────────────────────────────────────────
+
+// Fetch all scenes belonging to the logged-in user.
+export async function getScenes(): Promise<Scene[]> {
+    return api<Scene[]>('/scenes')
+}
+
+// Fetch a single scene by id (public — used by viewer).
 export async function getScene(id: string): Promise<Scene> {
-    const res = await fetch(`${BASE}/scenes/${id}`)
-    if (!res.ok) throw new Error('Scene not found')
-    return res.json()
+    return api<Scene>(`/scenes/${id}`)
 }
 
-// --- Auth ---
-
-export async function register(email: string, password: string): Promise<AuthResponse> {
-    const res = await fetch(`${BASE}/auth/register`, {
+// Create a new scene with a name. Assets are added separately in the editor.
+export async function createScene(
+    name: string
+): Promise<{ id: string; qrDataUrl: string; viewerUrl: string }> {
+    return api('/scenes', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ name, assetIds: [] }),
     })
-    if (!res.ok) throw new Error('Registration failed')
-    return res.json()
 }
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
-    const res = await fetch(`${BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+// Rename a scene.
+export async function renameScene(id: string, name: string): Promise<void> {
+    await api(`/scenes/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
     })
-    if (!res.ok) throw new Error('Login failed')
-    return res.json()
+}
+
+// Delete a scene.
+export async function deleteScene(id: string): Promise<void> {
+    await api(`/scenes/${id}`, { method: 'DELETE' })
+}
+
+// Open the builder for a scene. Destroys Vue and navigates to the raw HTML editor.
+export function openEditor(sceneId: string): void {
+    window.location.href = `/builder/${sceneId}`
 }

@@ -1,7 +1,8 @@
 // src/routes/auth.ts
 import { Hono } from "hono";
+import { setCookie, deleteCookie, getCookie } from 'hono/cookie'
 import { db } from "../db/index.js";
-import { users } from "../db/schema.js";
+import { users, sessions } from "../db/schema.js";
 import { hashPassword, verifyPassword } from "../lib/passwords.js";
 import { eq } from "drizzle-orm";
 
@@ -57,7 +58,48 @@ auth.post ('/login', async (c) => {
         return c.json({ error: 'Invalid credentials' }, 401);
     }
 
-    return c.json({ success: true });
+    const [session] = await db
+        .insert(sessions)
+        .values({ userId: user.id })
+        .returning()
+
+    setCookie(c, 'session', session.token, {
+        httpOnly: true,    // JS cannot read this cookie
+        sameSite: 'Lax',   // sent on normal navigations, blocked on cross-site POSTs
+        path: '/',         // valid for all routes
+        maxAge: 60 * 60 * 24 * 7  // 1 week in seconds
+    })
+
+    return c.json({ success: true })
+})
+
+auth.post('/logout', (c) => {
+    deleteCookie(c, 'session')
+    return c.json({ success: true })
+})
+
+auth.get('/me', async (c) => {
+    const token = getCookie(c, 'session')
+    if (!token) return c.json({ user: null }, 401)
+
+    const session = await db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.token, token))
+        .get()
+
+    if (!session) return c.json({ user: null }, 401)
+
+    const user = await db
+        .select({ id: users.id, email: users.email })
+        .from(users)
+        .where(eq(users.id, session.userId))
+        .get()
+
+    return c.json({ user })
 })
 
 export default auth
+
+
+

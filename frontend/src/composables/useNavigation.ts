@@ -7,7 +7,7 @@ export function useNavigation() {
   const { smAndDown } = useDisplay()
 
   const navItems = [
-    { title: 'Home',     icon: 'mdi-view-dashboard',         to: '/admin' },
+    { title: 'Home',     icon: 'mdi-home',                   to: '/admin/home' },
     { title: 'Escenas',  icon: 'mdi-account-group',          to: '/admin/scenes' },
     { title: 'Recursos', icon: 'mdi-cog',                    to: '/admin/assets' },
     { title: 'Cuenta',   icon: 'mdi-account-circle-outline', to: '/admin/account' },

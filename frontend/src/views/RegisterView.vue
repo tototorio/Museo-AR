@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 const auth = useAuthStore()
 const router = useRouter()
 
+const name          = ref('')
 const email           = ref('')
 const password        = ref('')
 const confirmPassword = ref('')
@@ -22,7 +23,7 @@ async function handleRegister() {
 
   loading.value = true
   try {
-    await auth.register(email.value, password.value)
+    await auth.register(email.value, name.value, password.value)
     router.push('/login')
   } catch (e: any) {
     error.value = e.message
@@ -43,6 +44,7 @@ async function handleRegister() {
               <v-alert v-if="error" type="error" class="mb-4" density="compact">
                 {{ error }}
               </v-alert>
+              <v-text-field v-model="name" label="Nombre" type="text" variant="outlined" class="mb-3" />
               <v-text-field v-model="email" label="Correo electrónico" type="email" variant="outlined" class="mb-3" />
               <v-text-field v-model="password" label="Contraseña" type="password" variant="outlined" class="mb-3" />
               <v-text-field v-model="confirmPassword" label="Confirmar contraseña" type="password" variant="outlined" class="mb-3" @keyup.enter="handleRegister" />

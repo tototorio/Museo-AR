@@ -6,6 +6,7 @@ import { createId } from '@paralleldrive/cuid2'
 export const users = sqliteTable('users', {
     id:           text('id').primaryKey().$defaultFn(createId),
     email:        text('email').notNull().unique(),
+    name:         text('name').notNull(),
     passwordHash: text('password_hash').notNull(),
     created_at:   integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
 })

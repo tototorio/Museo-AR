@@ -1,10 +1,8 @@
-
 <script setup lang="ts">
-  import { onMounted } from 'vue'
-  import { useAuthStore } from '@/api/auth'
-
-  const auth = useAuthStore()
-  onMounted(() => auth.checkAuth())
+// import { onMounted } from 'vue'
+// import { useAuthStore } from '@/api/auth'
+// const auth = useAuthStore()
+// onMounted(() => auth.checkAuth())
 </script>
 
 <template>

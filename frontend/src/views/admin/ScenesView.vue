@@ -1,12 +1,13 @@
 <!-- src/views/admin/ScenesView.vue -->
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import QRCode from 'qrcode'
 import { getScenes, createScene, renameScene, deleteScene, openEditor } from '@/api/clients'
 import type { Scene } from '@/api/clients'
 
-const scenes       = ref<Scene[]>([])
-const loading      = ref(true)
-const error        = ref('')
+const scenes  = ref<Scene[]>([])
+const loading = ref(true)
+const error   = ref('')
 
 // Create dialog
 const createDialog = ref(false)
@@ -14,15 +15,21 @@ const newSceneName = ref('')
 const creating     = ref(false)
 
 // Rename dialog
-const renameDialog    = ref(false)
-const renamingScene   = ref<Scene | null>(null)
-const renameValue     = ref('')
-const renaming        = ref(false)
+const renameDialog  = ref(false)
+const renamingScene = ref<Scene | null>(null)
+const renameValue   = ref('')
+const renaming      = ref(false)
 
 // Delete dialog
-const deleteDialog    = ref(false)
-const deletingScene   = ref<Scene | null>(null)
-const deleting        = ref(false)
+const deleteDialog  = ref(false)
+const deletingScene = ref<Scene | null>(null)
+const deleting      = ref(false)
+
+// QR dialog
+const qrDialog      = ref(false)
+const qrScene       = ref<Scene | null>(null)
+const qrDataUrl     = ref('')
+const qrGenerating  = ref(false)
 
 async function load() {
   loading.value = true
@@ -43,7 +50,6 @@ async function handleCreate() {
     const { id } = await createScene(newSceneName.value.trim())
     createDialog.value = false
     newSceneName.value = ''
-    // Go straight to the editor after creating
     openEditor(id)
   } catch (e: any) {
     error.value = e.message
@@ -91,6 +97,70 @@ async function handleDelete() {
   }
 }
 
+// Builds the viewer URL using the real origin so it works in any environment
+function viewerUrl(sceneId: string): string {
+  return `${window.location.origin}/viewer/${sceneId}`
+}
+
+async function openQr(scene: Scene) {
+  qrScene.value     = scene
+  qrDataUrl.value   = ''
+  qrDialog.value    = true
+  qrGenerating.value = true
+  try {
+    qrDataUrl.value = await QRCode.toDataURL(viewerUrl(scene.id), {
+      errorCorrectionLevel: 'H', // highest: survives damage, good for physical prints
+      margin: 2,
+      width: 800,                // large enough for clean printing and 3D printing
+    })
+  } catch (e: any) {
+    error.value = e.message
+    qrDialog.value = false
+  } finally {
+    qrGenerating.value = false
+  }
+}
+
+function downloadQr() {
+  if (!qrDataUrl.value || !qrScene.value) return
+  const a = document.createElement('a')
+  a.href     = qrDataUrl.value
+  a.download = `qr-${qrScene.value.name}.png`
+  a.click()
+}
+
+function printQr() {
+  if (!qrDataUrl.value || !qrScene.value) return
+  const win = window.open('', '_blank')!
+  win.document.write(`
+    <html>
+      <head>
+        <title>QR - ${qrScene.value.name}</title>
+        <style>
+          body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: sans-serif;
+          }
+          img { width: 400px; height: 400px; }
+          p { margin-top: 16px; font-size: 14px; color: #555; }
+        </style>
+      </head>
+      <body>
+        <img src="${qrDataUrl.value}" />
+        <p>${qrScene.value.name}</p>
+        <p style="font-size:11px">${viewerUrl(qrScene.value.id)}</p>
+        <script>window.onload = () => { window.print(); window.close() }<\/script>
+      </body>
+    </html>
+  `)
+  win.document.close()
+}
+
 onMounted(load)
 </script>
 
@@ -106,11 +176,7 @@ onMounted(load)
         </p>
       </div>
       <v-spacer />
-      <v-btn
-        color="primary"
-        prepend-icon="mdi-plus"
-        @click="createDialog = true"
-      >
+      <v-btn color="primary" prepend-icon="mdi-plus" @click="createDialog = true">
         Nueva escena
       </v-btn>
     </div>
@@ -144,7 +210,6 @@ onMounted(load)
       >
         <v-card rounded="lg" elevation="2">
 
-          <!-- Preview placeholder -->
           <v-sheet
             height="160"
             color="surface-variant"
@@ -163,7 +228,6 @@ onMounted(load)
               {{ new Date(scene.createdAt).toLocaleDateString('es-CL') }}
             </v-card-subtitle>
 
-            <!-- 3-dot menu -->
             <template #append>
               <v-menu>
                 <template #activator="{ props }">
@@ -180,6 +244,11 @@ onMounted(load)
                     title="Renombrar"
                     @click="openRename(scene)"
                   />
+                  <v-list-item
+                    prepend-icon="mdi-qrcode"
+                    title="Ver QR"
+                    @click="openQr(scene)"
+                  />
                   <v-divider />
                   <v-list-item
                     prepend-icon="mdi-delete-outline"
@@ -194,6 +263,47 @@ onMounted(load)
         </v-card>
       </v-col>
     </v-row>
+
+    <!-- ── QR dialog ─────────────────────────────────────────────────────── -->
+    <v-dialog v-model="qrDialog" max-width="400">
+      <v-card rounded="lg">
+        <v-card-title class="pt-5 px-6">
+          Código QR — {{ qrScene?.name }}
+        </v-card-title>
+        <v-card-text class="px-6 d-flex flex-column align-center">
+
+          <v-progress-circular v-if="qrGenerating" indeterminate color="primary" class="my-8" />
+
+          <template v-else>
+            <img :src="qrDataUrl" width="280" height="280" />
+            <p class="text-caption text-medium-emphasis mt-3 text-center">
+              {{ viewerUrl(qrScene!.id) }}
+            </p>
+          </template>
+
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5">
+          <v-btn
+            prepend-icon="mdi-printer"
+            variant="tonal"
+            :disabled="qrGenerating"
+            @click="printQr"
+          >
+            Imprimir
+          </v-btn>
+          <v-btn
+            prepend-icon="mdi-download"
+            variant="tonal"
+            :disabled="qrGenerating"
+            @click="downloadQr"
+          >
+            Descargar
+          </v-btn>
+          <v-spacer />
+          <v-btn variant="text" @click="qrDialog = false">Cerrar</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- ── Create dialog ─────────────────────────────────────────────────── -->
     <v-dialog v-model="createDialog" max-width="440">
@@ -264,12 +374,7 @@ onMounted(load)
         <v-card-actions class="px-6 pb-5">
           <v-spacer />
           <v-btn variant="text" @click="deleteDialog = false">Cancelar</v-btn>
-          <v-btn
-            color="error"
-            variant="flat"
-            :loading="deleting"
-            @click="handleDelete"
-          >
+          <v-btn color="error" variant="flat" :loading="deleting" @click="handleDelete">
             Eliminar
           </v-btn>
         </v-card-actions>

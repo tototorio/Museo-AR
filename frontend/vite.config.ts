@@ -28,6 +28,8 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3000',
       '/uploads' : 'http://localhost:3000',
+      '/builder' : 'http://localhost:3000',
+      '/viewer' : 'http://localhost:3000',
     }
   }
 })

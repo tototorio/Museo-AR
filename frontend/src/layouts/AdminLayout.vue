@@ -10,13 +10,11 @@ const { isMobile } = useNavigation()
 </script>
 
 <template>
-  <v-app>
+  <div>
     <AppBar v-if="!isMobile" />
-
     <v-main>
       <router-view />
     </v-main>
-
     <BottomNav v-if="isMobile" />
-  </v-app>
+  </div>
 </template>

@@ -40,12 +40,12 @@ export const useAuthStore = defineStore('auth', () => {
         await checkAuth() // populate user from /me after successful login
     }
 
-    async function register(email: string, password: string) {
+    async function register(email: string, name: string, password: string) {
         const res = await fetch('/api/auth/register', {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
+            body: JSON.stringify({ email, name, password })
         })
 
         if (!res.ok) {

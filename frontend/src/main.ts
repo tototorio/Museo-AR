@@ -58,9 +58,11 @@ const vuetify = createVuetify({
 
 })
 const pinia = createPinia()
-
-app.use(vuetify).use(router).use(pinia)
+app.use(pinia)        // pinia must be first
 
 const auth = useAuthStore()
-await auth.checkAuth()
+await auth.checkAuth() // wait for auth before router sees anything
+
+app.use(vuetify)
+app.use(router)        // router installs now, initial navigation fires with isLoggedIn: true
 app.mount('#app')

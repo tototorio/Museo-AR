@@ -3,7 +3,7 @@ import { useGreeting } from '@/composables/userGreeting'
 import { useAuthStore } from '@/api/auth' // or however you access the user
 
 const auth = useAuthStore()
-const { greeting } = useGreeting(auth.username)
+const { greeting } = useGreeting(auth.user.name)
 </script>
 
 <template>

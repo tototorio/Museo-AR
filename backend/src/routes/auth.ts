@@ -10,11 +10,15 @@ const auth = new Hono()
 
 // Register new user
 auth.post('/register', async (c) => {
-    const { email, password } = await c.req.json()
+    const { email, name, password } = await c.req.json()
 
     // Basic validation
-    if (!email || !password || typeof email !== 'string' || typeof password !== 'string' || password.length < 8) {
-        return c.json({ error: 'Invalid email or password' }, 400);
+    if (
+        !email ||  typeof email !== 'string' || 
+        !name || typeof name !== 'string' ||
+        !password ||typeof password !== 'string' || password.length < 8
+    ) {
+        return c.json({ error: 'Invalid email, name or password' }, 400);
     }
 
     // Check if user already exists
@@ -31,7 +35,7 @@ auth.post('/register', async (c) => {
     // Hash the password and store the user
     const passwordHash = await hashPassword(password);
 
-    await db.insert(users).values({ email, passwordHash });
+    await db.insert(users).values({ email, name, passwordHash });
 
     return c.json({ message: 'User registered successfully' }, 201);
 })
@@ -91,7 +95,7 @@ auth.get('/me', async (c) => {
     if (!session) return c.json({ user: null }, 401)
 
     const user = await db
-        .select({ id: users.id, email: users.email })
+        .select({ id: users.id, email: users.email, name: users.name})
         .from(users)
         .where(eq(users.id, session.userId))
         .get()
